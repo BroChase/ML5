@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 
 if __name__ == '__main__':
-    path = 'fingerspelling5'
+    path = 'fingerspelling5/dataset5/A'
     alpha = .001
     max_epochs = 10
     batch_size = 256
