@@ -44,12 +44,13 @@ def maxpool_layer(in_tensors, sampling):
 
 def conv_layer(in_tensors, kernel_size, n_units):
     # weights
-    w = tf.get_variable('conv_W', [kernel_size, kernel_size, in_tensors.get_shape()[3], n_units],
-                        tf.float32, tf.contrib.layers.xavier_initializer())
-    # variable_summaries(w)
+    with tf.variable_scope('w'):
+        w = tf.get_variable('conv_W', [kernel_size, kernel_size, in_tensors.get_shape()[3], n_units],
+                            tf.float32, tf.contrib.layers.xavier_initializer())
     # biases
-    b = tf.get_variable('conv_B', [n_units, ], tf.float32, tf.constant_initializer(0.0))
-    # variable_summaries(b)
+    with tf.variable_scope('b'):
+        b = tf.get_variable('conv_B', [n_units, ], tf.float32, tf.constant_initializer(0.0))
+
     # return weights + biases
     return tf.nn.leaky_relu(tf.nn.conv2d(in_tensors, w, [1, 1, 1, 1], 'SAME') + b)
 
@@ -61,13 +62,13 @@ def dropout(in_tensors, keep_proba, is_training):
 
 def model(in_tensors, is_training):
 
-    # First layer: 5x5 2d-conv, 32 filters, 2x maxpool, 20% dropout
-    with tf.variable_scope('l1'):
+    # First layer: 5x5 2d-conv, 32 filters, 2x maxpool, 10% dropout
+    with tf.variable_scope('layer_1'):
         l1 = maxpool_layer(conv_layer(in_tensors, 5, 32), 2)
-        l1_out = dropout(l1, 0.8, is_training)
+        l1_out = dropout(l1, 0.9, is_training)
 
     # Second layer: 5x5 2d-conv, 64 filters, 2x maxpool, 20% dropout
-    with tf.variable_scope('l2'):
+    with tf.variable_scope('layer_2'):
         l2 = maxpool_layer(conv_layer(l1_out, 5, 64), 2)
         l2_out = dropout(l2, 0.8, is_training)
 
@@ -75,7 +76,7 @@ def model(in_tensors, is_training):
         l2_out_flat = tf.layers.flatten(l2_out)
 
     # Fully collected layer, 1024 neurons, 40% dropout
-    with tf.variable_scope('l3'):
+    with tf.variable_scope('layer_3'):
         l3 = fc_layer(l2_out_flat, 1024)
         l3_out = dropout(l3, 0.6, is_training)
 
@@ -111,7 +112,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
 
     # cost function
     with tf.name_scope('cross_entropy'):
-        loss_score = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=in_y_tensors_batch)
+        loss_score = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=in_y_tensors_batch)
         loss = tf.reduce_mean(loss_score)
 
     # Optimizer
@@ -133,9 +134,11 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
             print("Epoch=", epoch)
             tf_score = []
             for mb in minibatcher(X_train, y_train, batch_size, shuffle=True):
+                run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+
                 _, tf_output, summary = session.run([optimizer, loss, summary_op], feed_dict={in_X_tensors_batch: mb[0],
                                                                       in_y_tensors_batch: mb[1],
-                                                                      is_training: True})
+                                                                      is_training: True}, options=run_options)
 
                 summary_writer.add_summary(summary, epoch)
                 tf_score.append(tf_output)
