@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
     f = open('report.doc', 'w')
-    path = 'fingerspelling5/dataset5/A'
+    path = 'fingerspelling5'
     alpha = .001
     max_epochs = 10
     batch_size = 256
