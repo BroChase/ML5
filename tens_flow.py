@@ -9,10 +9,11 @@ def minibatcher(X, y, batch_size, shuffle):
     n_samples = X.shape[0]
 
     if shuffle:
+        # Randomly permute range n_samples
         idx = np.random.permutation(n_samples)
     else:
         idx = list(range(n_samples))
-
+    # take the ceiling of the n_samples/batch_size
     for k in range(int(np.ceil(n_samples/batch_size))):
         from_idx = k * batch_size
         to_idx = (k+1)*batch_size
@@ -20,21 +21,22 @@ def minibatcher(X, y, batch_size, shuffle):
 
 
 def fc_no_activation_layer(in_tensors, n_units):
-    w = tf.get_variable('fc_W', [in_tensors.get_shape()[1], n_units], tf.float32,
-                        tf.contrib.layers.xavier_initializer())
-    variable_summaries(w)
-    b = tf.get_variable('fc_B', [n_units, ], tf.float32,
-                        tf.constant_initializer(0.0))
-    variable_summaries(b)
-    # preactivate = tf.matmul(in_tensors, w) + b
-    # tf.summary.histogram('pre_activations', preactivate)
-    return tf.matmul(in_tensors, w) + b
+    with tf.variable_scope('w'):
+        w = tf.get_variable('fc_W', [in_tensors.get_shape()[1], n_units], tf.float32,
+                            tf.contrib.layers.xavier_initializer())
+    with tf.variable_scope('b'):
+        b = tf.get_variable('fc_B', [n_units, ], tf.float32,
+                            tf.constant_initializer(0.0))
+
+    preactivate = tf.matmul(in_tensors, w) + b
+    tf.summary.histogram('pre_activations', preactivate)
+    return preactivate  # tf.matmul(in_tensors, w) + b
 
 
 def fc_layer(in_tensors, n_units):
-    # activations = tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, n_units))
-    # tf.summary.histogram('activations', activations)
-    return tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, n_units))
+    activations = tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, n_units))
+    tf.summary.histogram('activations', activations)
+    return activations  # tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, n_units))
 
 
 def maxpool_layer(in_tensors, sampling):
@@ -67,40 +69,32 @@ def model(in_tensors, is_training):
         l1 = maxpool_layer(conv_layer(in_tensors, 5, 32), 2)
         l1_out = dropout(l1, 0.9, is_training)
 
-    # Second layer: 5x5 2d-conv, 64 filters, 2x maxpool, 20% dropout
+    # Second layer: 5x5 2d-conv, 48 filters, 2x maxpool, 20% dropout
     with tf.variable_scope('layer_2'):
-        l2 = maxpool_layer(conv_layer(l1_out, 5, 64), 2)
+        l2 = maxpool_layer(conv_layer(l1_out, 5, 48), 2)
         l2_out = dropout(l2, 0.8, is_training)
 
+    # Second layer: 5x5 2d-conv, 64 filters, 2x maxpool, 20% dropout
+    with tf.variable_scope('layer_3'):
+        l3 = maxpool_layer(conv_layer(l2_out, 5, 64), 2)
+        l3_out = dropout(l3, 0.8, is_training)
+
     with tf.variable_scope('flatten'):
-        l2_out_flat = tf.layers.flatten(l2_out)
+        l3_out_flat = tf.layers.flatten(l3_out)
 
     # Fully collected layer, 1024 neurons, 40% dropout
-    with tf.variable_scope('layer_3'):
-        l3 = fc_layer(l2_out_flat, 1024)
-        l3_out = dropout(l3, 0.6, is_training)
+    with tf.variable_scope('layer_4'):
+        l4 = fc_layer(l3_out_flat, 1024)
+        l4_out = dropout(l4, 0.6, is_training)
 
     # Output
     with tf.variable_scope('out'):
-        out_tensors = fc_no_activation_layer(l3_out, 25)
+        out_tensors = fc_no_activation_layer(l4_out, 25)
 
     return out_tensors
 
 
-def variable_summaries(var):
-
-    with tf.name_scope('summaries'):
-        mean = tf.reduce_mean(var)
-        tf.summary.scalar('mean', mean)
-        with tf.name_scope('stddev'):
-            stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-        tf.summary.scalar('stddev', stddev)
-        tf.summary.scalar('max', tf.reduce_max(var))
-        tf.summary.scalar('min', tf.reduce_min(var))
-        tf.summary.histogram('histogram', var)
-
-
-def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, batch_size, resized_image, n_classes):
+def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, batch_size, resized_image, n_classes, f):
 
     in_X_tensors_batch = tf.placeholder(tf.float32, shape=(None, resized_image[0], resized_image[1], 1))
     in_y_tensors_batch = tf.placeholder(tf.float32, shape=(None, n_classes))
@@ -132,6 +126,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
 
         for epoch in range(max_epochs):
             print("Epoch=", epoch)
+            f.write('Epoch={0:2d}\n'.format(epoch))
             tf_score = []
             for mb in minibatcher(X_train, y_train, batch_size, shuffle=True):
                 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -142,29 +137,35 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
 
                 summary_writer.add_summary(summary, epoch)
                 tf_score.append(tf_output)
-            print(' train_loss_score=', np.mean(tf_score))
-
-
+            print(' Train_loss_score=', np.mean(tf_score))
+            f.write(' Train_loss_score{:.4f}\n'.format(np.mean(tf_score)))
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         print('TEST SET PERFORMANCE')
-        y_test_pred, test_loss = session.run([out_y_pred, loss], feed_dict={in_X_tensors_batch: X_test,
+        f.write('TEST SET PERFORMANCE\n')
+        y_test_pred, test_loss, summary = session.run([out_y_pred, loss, summary_op], feed_dict={in_X_tensors_batch: X_test,
                                                                             in_y_tensors_batch: y_test,
-                                                                            is_training: False})
+                                                                            is_training: False}, options=run_options)
 
         print('Test_loss_score=', test_loss)
+        f.write('Test_loss_score={:4f}\n'.format(test_loss))
+
+        with tf.name_scope('Accuracy'):
+            acc = tf.equal(np.argmax(y_test_pred, axis=1).astype(np.int32), np.argmax(y_test, axis=1).astype(np.int32))
+
+        summary_writer.add_summary(summary)
+
+
         y_test_pred_classified = np.argmax(y_test_pred, axis=1).astype(np.int32)
         y_test_true_classified = np.argmax(y_test, axis=1).astype(np.int32)
         print(classification_report(y_test_true_classified, y_test_pred_classified))
-        print(accuracy_score(y_test_true_classified, y_test_pred_classified))
+        f.write(classification_report(y_test_true_classified, y_test_pred_classified))
+        print('{:2f}'.format(accuracy_score(y_test_true_classified, y_test_pred_classified)))
+        f.write('{:2f}\n'.format(accuracy_score(y_test_true_classified, y_test_pred_classified)))
         cfm = confusion_matrix(y_test_true_classified, y_test_pred_classified)
 
-        plt.clf()
-
-        plt.imshow(cfm, interpolation='nearest', cmap=plt.cm.Blues)
-        plt.colorbar()
-        plt.tight_layout()
-        plt.show()
-
-        plt.imshow(np.log2(cfm + 1), interpolation='nearest', cmap=plt.get_cmap('tab20'))
-        plt.colorbar()
-        plt.tight_layout()
-        plt.show()
+        # plt.clf()
+        # plt.imshow(cfm, interpolation='nearest', cmap=plt.cm.Blues)
+        # plt.colorbar()
+        # plt.tight_layout()
+        # plt.savefig('cfm.png')
+        # plt.show()
