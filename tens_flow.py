@@ -122,7 +122,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
         # initialize variables to default values
         session.run(tf.global_variables_initializer())
         # Write logs to tensorboard file.
-        summary_writer = tf.summary.FileWriter('./logs/1/train', session.graph)
+        summary_writer = tf.summary.FileWriter('./logs/train', session.graph)
 
         for epoch in range(max_epochs):
             print("Epoch=", epoch)
@@ -139,6 +139,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
                 tf_score.append(tf_output)
             print(' Train_loss_score=', np.mean(tf_score))
             f.write(' Train_loss_score{:.4f}\n'.format(np.mean(tf_score)))
+        summary_writer_test = tf.summary.FileWriter('./logs/test', session.graph)
         run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         print('TEST SET PERFORMANCE')
         f.write('TEST SET PERFORMANCE\n')
@@ -152,7 +153,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
         with tf.name_scope('Accuracy'):
             acc = tf.equal(np.argmax(y_test_pred, axis=1).astype(np.int32), np.argmax(y_test, axis=1).astype(np.int32))
 
-        summary_writer.add_summary(summary)
+        summary_writer_test.add_summary(summary)
 
 
         y_test_pred_classified = np.argmax(y_test_pred, axis=1).astype(np.int32)

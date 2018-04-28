@@ -1,11 +1,10 @@
 import img_load
 import tens_flow
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 
 if __name__ == '__main__':
-    f = open('report.docx', 'w')
+    f = open('report.doc', 'w')
     path = 'fingerspelling5'
     alpha = .001
     max_epochs = 10
