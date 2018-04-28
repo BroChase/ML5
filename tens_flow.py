@@ -126,7 +126,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
 
         for epoch in range(max_epochs):
             print("Epoch=", epoch)
-            f.write('Epoch={0:2d}\n'.format(epoch))
+            # f.write('Epoch={0:2d}\n'.format(epoch))
             tf_score = []
             for mb in minibatcher(X_train, y_train, batch_size, shuffle=True):
                 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -160,7 +160,7 @@ def train_model(X_train, y_train, X_test, y_test, learning_rate, max_epochs, bat
         print(classification_report(y_test_true_classified, y_test_pred_classified))
         f.write(classification_report(y_test_true_classified, y_test_pred_classified))
         print('{:2f}'.format(accuracy_score(y_test_true_classified, y_test_pred_classified)))
-        f.write('{:2f}\n'.format(accuracy_score(y_test_true_classified, y_test_pred_classified)))
+        f.write('Accuracy: {:2f}\n'.format(accuracy_score(y_test_true_classified, y_test_pred_classified)))
         cfm = confusion_matrix(y_test_true_classified, y_test_pred_classified)
 
         # plt.clf()
